@@ -11,7 +11,7 @@ context = zmq.Context()
 # ------------------------------------------------------------------------------
 
 def log_msg(client_id, msg):
-    print("<< <%s>: %s" % (client_id, msg))
+    print("[%s] <%s> ==> %s" % (time.strftime("%Y-%m-%d %H:%M:%S"), client_id, msg))
 
 # Remove empty values from dictionary
 def prune_dict(d):
@@ -97,7 +97,7 @@ class Service:
     # --------------------------------------------------------------------------
 
     def emit(self, event, data):
-        print("%s: %s" % (event, data))
+        print("===> %s: %s" % (event, data))
         if event in self.subscriptions:
             for subscription in self.subscriptions[event]:
                 self.sock.send(subscription['client_id'], zmq.SNDMORE)
@@ -124,7 +124,6 @@ class Service:
     def pass_check(self):
         check_id = 'service:' + self.name
         check_request = requests.get('http://localhost:8500/v1/agent/check/pass/%s' % check_id)
-        print("Checked", check_request)
 
     def pass_checks_loop(self):
         while True:
