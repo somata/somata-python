@@ -55,27 +55,30 @@ class Service:
             socks = dict(self.poll.poll(1000))
             if self.sock in socks and socks[self.sock] == zmq.POLLIN:
                 # Get client ID and message
-                _id = self.sock.recv()
-                msg = self.sock.recv_json()
-                log_msg(_id, msg)
+                client_id = self.sock.recv()
+                message = self.sock.recv_json()
+                log_msg(client_id, message)
 
-                if 'kind' not in msg:
-                    print("Invalid message: %s" % msg)
+                if 'kind' not in message:
+                    print("Invalid message: %s" % message)
 
-                handler_name = 'handle_' + msg['kind']
-                if hasattr(self, handler_name):
-                    handler = getattr(self, handler_name)
-                    handler(self.sock, _id, msg)
-                else:
-                    print("No handler for: %s" % msg['kind'])
+                self.handle_message(client_id, message)
+
+    def handle_message(self, client_id, message):
+        handler_name = 'handle_' + message['kind']
+        if hasattr(self, handler_name):
+            handler = getattr(self, handler_name)
+            handler(client_id, message)
+        else:
+            print("No handler for: %s" % message['kind'])
 
     # Handlers
     # --------------------------------------------------------------------------
 
-    def handle_subscribe(self, client_sock, client_id, msg):
-        event_type = msg['type']
+    def handle_subscribe(self, client_id, message):
+        event_type = message['type']
         new_subscription = {
-            'id': msg['id'],
+            'id': message['id'],
             'client_id': client_id
         }
         if event_type in self.subscriptions:
