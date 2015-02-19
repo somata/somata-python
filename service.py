@@ -86,14 +86,10 @@ class Service:
         else:
             self.subscriptions[event_type] = [new_subscription]
 
-    def handle_unsubscribe(self, client_sock, client_id, msg):
-        print("<< <%s>: %s" % (client_id, msg))
-        event_type = msg['type']
+    def handle_unsubscribe(self, client_id, message):
+        event_type = message['type']
         without_client = lambda subs: [s for s in subs if s['client_id'] != client_id]
-        self.subscriptions = {
-            event_type: without_client(subs)
-            for event_type, subs in self.subscriptions.items()
-        }
+        self.subscriptions[event_type] = without_client(self.subscriptions[event_type])
         self.subscriptions = prune_dict(self.subscriptions)
 
     # Event emitting
