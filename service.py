@@ -5,6 +5,8 @@ import requests
 import signal
 import sys
 import zmq
+from .helpers import random_string
+from .client import Client
 context = zmq.Context()
 
 # Helpers
@@ -22,28 +24,39 @@ def prune_dict(d):
 
 class Service:
 
-    def __init__(self, name, options):
+    def __init__(self, name, methods, options):
         self.name = name
+        self.id = self.name + '~' + random_string(8)
+        self.methods = methods
         self.options = options
         self.subscriptions = {}
 
         # Create the binding socket
-        self.sock = context.socket(zmq.ROUTER)
-        self.sock.bind('tcp://0.0.0.0:%s' % options['bind_port'])
-
-        self.poll = zmq.Poller()
-        self.poll.register(self.sock, zmq.POLLIN)
-
-        self.register()
-
-        # Start the socket receive thread
-        threading.Thread(target=self.socket_recv_loop).start()
-
-        # Start a thread for check passing
-        threading.Thread(target=self.pass_checks_loop).start()
+        self.socket = context.socket(zmq.ROUTER)
+        self.socket.bind('tcp://0.0.0.0:%s' % options['bind_port'])
 
         # Deregister when killed
         signal.signal(signal.SIGINT, lambda signal, frame: self.deregister())
+
+        self.poll = zmq.Poller()
+        self.poll.register(self.socket, zmq.POLLIN)
+
+        # Start the socket receive thread
+        self.running = True
+        self.recv_loop_thread = threading.Thread(target=self.socket_recv_loop)
+        self.recv_loop_thread.start()
+
+        # Start a thread for check passing
+        # threading.Thread(target=self.pass_checks_loop).start()
+
+        # Create registry client
+        self.registry_client = Client({'connect_port': 8420})
+        self.register()
+
+        # Wait
+        while self.running:
+            self.recv_loop_thread.join(1)
+            self.registry_client.recv_loop_thread.join(1)
 
     # Socket receive loop
     # --------------------------------------------------------------------------
@@ -51,12 +64,12 @@ class Service:
     # there's a handler function for a given message kind, call it.
 
     def socket_recv_loop(self):
-        while True:
+        while self.running:
             socks = dict(self.poll.poll(1000))
-            if self.sock in socks and socks[self.sock] == zmq.POLLIN:
+            if self.socket in socks and socks[self.socket] == zmq.POLLIN:
                 # Get client ID and message
-                client_id = self.sock.recv()
-                message = self.sock.recv_json()
+                client_id = self.socket.recv()
+                message = self.socket.recv_json()
                 log_msg(client_id, message)
 
                 if 'kind' not in message:
@@ -74,6 +87,21 @@ class Service:
 
     # Handlers
     # --------------------------------------------------------------------------
+
+    def handle_method(self, client_id, message):
+        method = message['method']
+        args = message['args']
+        if method in self.methods:
+            method_fn = self.methods[method]
+            def respond(response):
+                self.socket.send(client_id, zmq.SNDMORE)
+                self.socket.send_string(json.dumps({
+                    "id": message['id'],
+                    "kind": "response",
+                    "response": response
+                }))
+            args.append(respond)
+            method_fn(*args)
 
     def handle_subscribe(self, client_id, message):
         event_type = message['type']
@@ -99,8 +127,8 @@ class Service:
         print("===> %s: %s" % (event, data))
         if event in self.subscriptions:
             for subscription in self.subscriptions[event]:
-                self.sock.send(subscription['client_id'], zmq.SNDMORE)
-                self.sock.send_string(json.dumps({
+                self.socket.send(subscription['client_id'], zmq.SNDMORE)
+                self.socket.send_string(json.dumps({
                     "id": subscription['id'],
                     "kind": "event",
                     "event": data
@@ -110,27 +138,16 @@ class Service:
     # --------------------------------------------------------------------------
 
     def register(self):
-        register_request = requests.put('http://localhost:8500/v1/agent/service/register', data=json.dumps({
-            'Name': self.name,
-            'Port': self.options['bind_port'],
-            'Check': {
-                'Interval': 60,
-                'TTL': '10s'
-            }
-        }), headers={'content-type': 'application/json'})
-        print("Registered", register_request)
-
-    def pass_check(self):
-        check_id = 'service:' + self.name
-        check_request = requests.get('http://localhost:8500/v1/agent/check/pass/%s' % check_id)
-
-    def pass_checks_loop(self):
-        while True:
-            time.sleep(5)
-            self.pass_check()
+        instance = {'id': self.id, 'name': self.name, 'port': self.options['bind_port'], 'heartbeat': 0}
+        def register_cb(register_response):
+            print("Registered", register_response)
+        self.registry_client.send_method('registerService', [instance], register_cb)
 
     def deregister(self):
-        deregister_request = requests.get('http://localhost:8500/v1/agent/service/deregister/%s' % self.name)
-        print("Deregistered", deregister_request)
-        sys.exit()
+        def deregister_cb(deregister_response):
+            print("Deregistered", deregister_response)
+            self.running = False
+            self.registry_client.running = False
+            sys.exit()
+        self.registry_client.send_method('deregisterService', [self.id, self.name], deregister_cb)
 
