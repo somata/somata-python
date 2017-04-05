@@ -5,6 +5,7 @@ import requests
 import signal
 import sys
 import zmq
+from builtins import str
 from .helpers import random_string
 context = zmq.Context()
 
@@ -32,7 +33,7 @@ class Client:
 
         # Create the binding socket
         self.socket = context.socket(zmq.DEALER)
-        self.socket.setsockopt_string(zmq.IDENTITY, unicode(self.id))
+        self.socket.setsockopt_string(zmq.IDENTITY, str(self.id))
         self.socket.connect('tcp://127.0.0.1:%s' % options['connect_port'])
 
         self.poll = zmq.Poller()
