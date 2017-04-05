@@ -50,7 +50,7 @@ class Service:
         # threading.Thread(target=self.pass_checks_loop).start()
 
         # Create registry client
-        self.registry_client = Client({'connect_port': 8420})
+        self.registry_client = Client({'connect_port': 8420}, 'registry')
         self.register()
 
         # Wait
@@ -120,6 +120,20 @@ class Service:
         self.subscriptions[event_type] = without_client(self.subscriptions[event_type])
         self.subscriptions = prune_dict(self.subscriptions)
 
+    def handle_ping(self, client_id, message):
+        if message['ping'] == 'hello':
+            response = 'welcome'
+        elif message['ping'] == 'ping':
+            response = 'pong'
+        else:
+            print("Error: Unrecognized ping message of kind '%s'" % (message['kind']))
+        print("responding to ping with %s" % (response))
+        self.socket.send(client_id, zmq.SNDMORE)
+        self.socket.send_string(json.dumps({
+            "id": message['id'],
+            "kind": response,
+        }))
+
     # Event emitting
     # --------------------------------------------------------------------------
 
@@ -138,7 +152,7 @@ class Service:
     # --------------------------------------------------------------------------
 
     def register(self):
-        instance = {'id': self.id, 'name': self.name, 'port': self.options['bind_port'], 'heartbeat': 0}
+        instance = {'id': self.id, 'name': self.name, 'port': self.options['bind_port']}
         def register_cb(register_response):
             print("Registered", register_response)
         self.registry_client.send_method('registerService', [instance], register_cb)
