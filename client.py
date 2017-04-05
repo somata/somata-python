@@ -19,15 +19,16 @@ def log_msg(client_id, msg):
 
 class Client:
 
-    def __init__(self, options):
+    def __init__(self, options, service):
         self.id = random_string(8)
         self.options = options
         self.connections = {}
         self.pending = {}
+        self.service = service
 
         # Create the binding socket
         self.socket = context.socket(zmq.DEALER)
-        self.socket.setsockopt_string(zmq.IDENTITY, self.id)
+        self.socket.setsockopt_string(zmq.IDENTITY, unicode(self.id))
         self.socket.connect('tcp://127.0.0.1:%s' % options['connect_port'])
 
         self.poll = zmq.Poller()
@@ -67,5 +68,5 @@ class Client:
         self.socket.send_json(message)
 
     def send_method(self, method, args, cb):
-        self.send({'kind': 'method', 'method': method, 'args': args}, cb)
+        self.send({'kind': 'method', 'method': method, 'args': args, 'service': self.service}, cb)
 
