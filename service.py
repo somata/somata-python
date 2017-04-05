@@ -127,11 +127,11 @@ class Service:
             response = 'pong'
         else:
             print("Error: Unrecognized ping message of kind '%s'" % (message['kind']))
-        print("responding to ping with %s" % (response))
         self.socket.send(client_id, zmq.SNDMORE)
         self.socket.send_string(json.dumps({
-            "id": message['id'],
-            "kind": response,
+            'id': message['id'],
+            'kind': "pong",
+            'pong': response
         }))
 
     # Event emitting
@@ -152,7 +152,8 @@ class Service:
     # --------------------------------------------------------------------------
 
     def register(self):
-        instance = {'id': self.id, 'name': self.name, 'port': self.options['bind_port']}
+        heartbeat = 0 if 'heartbeat' not in self.options else self.options['heartbeat']
+        instance = {'id': self.id, 'name': self.name, 'port': self.options['bind_port'], 'heartbeat': heartbeat}
         def register_cb(register_response):
             print("Registered", register_response)
         self.registry_client.send_method('registerService', [instance], register_cb)
