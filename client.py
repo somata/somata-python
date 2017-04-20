@@ -4,6 +4,7 @@ import threading
 import requests
 import signal
 import sys
+import os
 import zmq
 from builtins import str
 from .helpers import random_string
@@ -11,13 +12,16 @@ context = zmq.Context()
 
 # Constants
 # ------------------------------------------------------------------------------
+
 PING_INTERVAL = 2
+VERBOSE = os.environ.get('SOMATA_VERBOSE')
 
 # Helpers
 # ------------------------------------------------------------------------------
 
 def log_msg(client_id, msg):
-    print("[%s] <%s> <== %s" % (time.strftime("%Y-%m-%d %H:%M:%S"), client_id, msg))
+    if VERBOSE:
+        print("[%s] <%s> <== %s" % (time.strftime("%Y-%m-%d %H:%M:%S"), client_id, msg))
 
 # Service class
 # ------------------------------------------------------------------------------
@@ -74,7 +78,7 @@ class Client:
 
     def socket_recv_loop(self):
         while self.running:
-            socks = dict(self.poll.poll(1000))
+            socks = dict(self.poll.poll(50))
             if self.socket in socks and socks[self.socket] == zmq.POLLIN:
                 # Get client ID and message
                 message = self.socket.recv_json()

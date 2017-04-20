@@ -4,16 +4,23 @@ import threading
 import requests
 import signal
 import sys
+import os
 import zmq
 from .helpers import random_string
 from .client import Client
 context = zmq.Context()
 
+# Constants
+# ------------------------------------------------------------------------------
+
+VERBOSE = os.environ.get('SOMATA_VERBOSE')
+
 # Helpers
 # ------------------------------------------------------------------------------
 
 def log_msg(client_id, msg):
-    print("[%s] <%s> ==> %s" % (time.strftime("%Y-%m-%d %H:%M:%S"), client_id, msg))
+    if VERBOSE:
+        print("[%s] <%s> ==> %s" % (time.strftime("%Y-%m-%d %H:%M:%S"), client_id, msg))
 
 # Remove empty values from dictionary
 def prune_dict(d):
@@ -65,7 +72,7 @@ class Service:
 
     def socket_recv_loop(self):
         while self.running:
-            socks = dict(self.poll.poll(1000))
+            socks = dict(self.poll.poll(50))
             if self.socket in socks and socks[self.socket] == zmq.POLLIN:
                 # Get client ID and message
                 client_id = self.socket.recv()
