@@ -100,13 +100,22 @@ class Service:
         args = message['args']
         if method in self.methods:
             method_fn = self.methods[method]
-            def respond(response):
-                self.socket.send(client_id, zmq.SNDMORE)
-                self.socket.send_string(json.dumps({
-                    "id": message['id'],
-                    "kind": "response",
-                    "response": response
-                }))
+            def respond(error, response=None):
+                if error is not None:
+                    print('send an error')
+                    self.socket.send(client_id, zmq.SNDMORE)
+                    self.socket.send_string(json.dumps({
+                        "id": message['id'],
+                        "kind": "error",
+                        "error": error
+                    }))
+                else:
+                    self.socket.send(client_id, zmq.SNDMORE)
+                    self.socket.send_string(json.dumps({
+                        "id": message['id'],
+                        "kind": "response",
+                        "response": response
+                    }))
             args.append(respond)
             method_fn(*args)
 
